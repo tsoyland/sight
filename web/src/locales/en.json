@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "Sight",
+    "tagline": "Live polls, quizzes, surveys and Q&A for your audience."
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "nb": "Norsk"
+  },
+  "join": {
+    "title": "Join a session",
+    "codeLabel": "Session code",
+    "codePlaceholder": "123 456",
+    "submit": "Join",
+    "comingSoon": "Joining sessions arrives in an upcoming milestone."
+  },
+  "features": {
+    "title": "What you can run",
+    "poll": { "name": "Live poll", "description": "Ask a question and watch the votes come in." },
+    "quiz": { "name": "Quiz", "description": "Timed questions, points and a leaderboard." },
+    "survey": { "name": "Survey", "description": "Self-paced forms people answer in their own time." },
+    "qa": { "name": "Q&A", "description": "Collect and upvote questions from the audience." }
+  },
+  "status": {
+    "checking": "Checking server…",
+    "online": "Server online (v{{version}})",
+    "offline": "Server unreachable"
+  }
+}
