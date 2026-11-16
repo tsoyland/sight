@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "Sight",
+    "tagline": "Direkte avstemninger, quiz, spørreundersøkelser og spørsmål fra publikum."
+  },
+  "language": {
+    "label": "Språk",
+    "en": "English",
+    "nb": "Norsk"
+  },
+  "join": {
+    "title": "Bli med i en økt",
+    "codeLabel": "Øktkode",
+    "codePlaceholder": "123 456",
+    "submit": "Bli med",
+    "comingSoon": "Å bli med i økter kommer i en senere milepæl."
+  },
+  "features": {
+    "title": "Dette kan du kjøre",
+    "poll": { "name": "Avstemning", "description": "Still et spørsmål og se stemmene komme inn." },
+    "quiz": { "name": "Quiz", "description": "Spørsmål på tid, poeng og resultatliste." },
+    "survey": { "name": "Spørreundersøkelse", "description": "Skjema folk svarer på når det passer dem." },
+    "qa": { "name": "Spørsmål og svar", "description": "Samle inn og stem frem spørsmål fra publikum." }
+  },
+  "status": {
+    "checking": "Sjekker serveren …",
+    "online": "Serveren er oppe (v{{version}})",
+    "offline": "Får ikke kontakt med serveren"
+  }
+}
