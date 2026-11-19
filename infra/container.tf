@@ -36,10 +36,10 @@ resource "scaleway_container" "app" {
 
   # Probes only check the process (/health/live); /health also checks the database.
   startup_probe {
-    # Up to ~60 s for a cold start.
-    failure_threshold = 30
-    interval          = "2s"
-    timeout           = "2s"
+    # Up to ~60 s for a cold start (Scaleway requires interval >= 5s).
+    failure_threshold = 12
+    interval          = "5s"
+    timeout           = "3s"
     http {
       path = "/health/live"
     }

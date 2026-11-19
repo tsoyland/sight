@@ -31,6 +31,12 @@ resource "scaleway_iam_api_key" "db" {
   application_id     = scaleway_iam_application.db.id
   description        = "${var.app_name} container -> Serverless SQL Database"
   default_project_id = scaleway_sdb_sql_database.main.project_id
+
+  lifecycle {
+    # The organization sets a default expiry (1 year) on new keys. Don't replace the key on every
+    # deploy because of it; to rotate before it expires, run: tofu apply -replace=scaleway_iam_api_key.db
+    ignore_changes = [expires_at]
+  }
 }
 
 locals {
