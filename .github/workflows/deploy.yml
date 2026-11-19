@@ -67,8 +67,8 @@ jobs:
           requested="${{ inputs.min_scale || 'keep' }}"
           if [ "$requested" = "keep" ]; then
             # Keep whatever is deployed now (0 on the very first deploy).
-            current=$(tofu output -raw min_scale 2>/dev/null || true)
-            requested="${current:-0}"
+            # (-json gives {} before the first deploy; -raw would print a warning instead.)
+            requested=$(tofu output -json | jq -r '.min_scale.value // 0')
           fi
           echo "value=$requested" >> "$GITHUB_OUTPUT"
           echo "min_scale: $requested"
@@ -79,7 +79,10 @@ jobs:
 
       - name: Registry endpoint
         id: registry
-        run: echo "endpoint=$(tofu output -raw registry_endpoint)" >> "$GITHUB_OUTPUT"
+        run: |
+          endpoint=$(tofu output -json | jq -r '.registry_endpoint.value // empty')
+          [[ "$endpoint" == rg.* ]] || { echo "::error::Unexpected registry endpoint: '$endpoint'"; exit 1; }
+          echo "endpoint=$endpoint" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -120,12 +123,13 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          out() { tofu output -json 2>/dev/null | jq -r --arg k "$1" '.[$k].value // "-"'; }
           {
             echo "### Sight deploy"
             echo "| | |"
             echo "|---|---|"
-            echo "| URL | $(tofu output -raw app_url 2>/dev/null || echo '-') |"
-            echo "| CNAME target | \`$(tofu output -raw container_hostname 2>/dev/null || echo '-')\` |"
+            echo "| URL | $(out app_url) |"
+            echo "| CNAME target | \`$(out container_hostname)\` |"
             echo "| Image tag | \`$IMAGE_TAG\` |"
             echo "| min_scale | ${{ steps.scale.outputs.value }} |"
           } >> "$GITHUB_STEP_SUMMARY"

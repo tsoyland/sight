@@ -88,10 +88,13 @@ jobs:
             echo "::notice::Scaleway secrets not configured yet; skipping plan (see infra/README.md)."
             exit 0
           fi
+          set -o pipefail
           tofu init -backend-config=backend.hcl
           # Plan against what is deployed now, so only infrastructure changes show up.
-          tag=$(tofu output -raw image_tag 2>/dev/null || echo not-deployed)
-          scale=$(tofu output -raw min_scale 2>/dev/null || echo 0)
+          # (-json gives {} before the first deploy; -raw would print a warning instead.)
+          outputs=$(tofu output -json)
+          tag=$(jq -r '.image_tag.value // "not-deployed"' <<<"$outputs")
+          scale=$(jq -r '.min_scale.value // 0' <<<"$outputs")
           tofu plan -no-color -var "image_tag=$tag" -var "min_scale=$scale" | tee plan.txt
           {
             echo "### OpenTofu plan"
