@@ -23,7 +23,7 @@ output "min_scale" {
   value       = var.min_scale
 }
 
-output "database_private_endpoint" {
-  description = "Private Network address of PostgreSQL."
-  value       = "${local.db_endpoint.ip}:${local.db_endpoint.port}"
+output "database_endpoint" {
+  description = "Serverless SQL Database endpoint (no credentials)."
+  value       = scaleway_sdb_sql_database.main.endpoint
 }

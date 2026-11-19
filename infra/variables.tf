@@ -44,8 +44,8 @@ variable "enable_custom_domain" {
   default     = false
 }
 
-variable "db_node_type" {
-  description = "Managed PostgreSQL node type."
-  type        = string
-  default     = "DB-DEV-S"
+variable "db_max_cpu" {
+  description = "Upper CPU limit for the Serverless SQL Database (it scales between 0 and this)."
+  type        = number
+  default     = 1
 }

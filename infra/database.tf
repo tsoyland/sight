@@ -1,74 +1,50 @@
-resource "random_password" "db_admin" {
-  length           = 32
-  min_upper        = 2
-  min_lower        = 2
-  min_numeric      = 2
-  min_special      = 2
-  override_special = "-_=+#%"
+# Serverless SQL Database (PostgreSQL 16): scales to zero, so an idle demo only pays for storage.
+# The first query after idle wakes it up (a few seconds).
+resource "scaleway_sdb_sql_database" "main" {
+  name    = var.app_name
+  version = 16
+  min_cpu = 0
+  max_cpu = var.db_max_cpu
+  region  = var.region
 }
 
-resource "random_password" "db_app" {
-  length           = 32
-  min_upper        = 2
-  min_lower        = 2
-  min_numeric      = 2
-  min_special      = 2
-  override_special = "-_=+#%"
+# Serverless SQL authenticates with IAM: username = IAM application ID, password = API secret key.
+# A dedicated application keeps the container's credentials limited to read/write on this project's databases.
+resource "scaleway_iam_application" "db" {
+  name        = "${var.app_name}-db-app"
+  description = "Used by the ${var.app_name} container to connect to its Serverless SQL Database"
+  tags        = local.tags
 }
 
-resource "scaleway_rdb_instance" "main" {
-  name           = "${var.app_name}-db"
-  node_type      = var.db_node_type
-  engine         = "PostgreSQL-16"
-  is_ha_cluster  = false
-  disable_backup = false
-  # Daily backups, kept for 7 days.
-  backup_schedule_frequency = 24
-  backup_schedule_retention = 7
-  encryption_at_rest        = true
+resource "scaleway_iam_policy" "db" {
+  name           = "${var.app_name}-db-access"
+  description    = "Read/write access to Serverless SQL Databases in the ${var.app_name} project"
+  application_id = scaleway_iam_application.db.id
 
-  user_name = "sightadmin"
-  password  = random_password.db_admin.result
-
-  # Only reachable from the Private Network: no public (load_balancer) endpoint.
-  private_network {
-    pn_id       = scaleway_vpc_private_network.main.id
-    enable_ipam = true
+  rule {
+    project_ids          = [scaleway_sdb_sql_database.main.project_id]
+    permission_set_names = ["ServerlessSQLDatabaseReadWrite"]
   }
-
-  region = var.region
-  tags   = local.tags
 }
 
-resource "scaleway_rdb_database" "app" {
-  instance_id = scaleway_rdb_instance.main.id
-  name        = var.app_name
-}
-
-resource "scaleway_rdb_user" "app" {
-  instance_id = scaleway_rdb_instance.main.id
-  name        = var.app_name
-  password    = random_password.db_app.result
-  is_admin    = false
-}
-
-resource "scaleway_rdb_privilege" "app" {
-  instance_id   = scaleway_rdb_instance.main.id
-  user_name     = scaleway_rdb_user.app.name
-  database_name = scaleway_rdb_database.app.name
-  permission    = "all"
+resource "scaleway_iam_api_key" "db" {
+  application_id     = scaleway_iam_application.db.id
+  description        = "${var.app_name} container -> Serverless SQL Database"
+  default_project_id = scaleway_sdb_sql_database.main.project_id
 }
 
 locals {
-  db_endpoint = scaleway_rdb_instance.main.private_network[0]
+  # Endpoint looks like postgres://<id>.pg.sdb.fr-par.scw.cloud:5432/<database>?sslmode=require
+  db_parts = regex("^postgres(?:ql)?://(?P<host>[^:/?]+):(?P<port>[0-9]+)/(?P<database>[^?]+)", scaleway_sdb_sql_database.main.endpoint)
+
   db_connection_string = join(";", [
-    "Host=${local.db_endpoint.ip}",
-    "Port=${local.db_endpoint.port}",
-    "Database=${scaleway_rdb_database.app.name}",
-    "Username=${scaleway_rdb_user.app.name}",
-    "Password=${random_password.db_app.result}",
-    # Traffic stays inside the Private Network; TLS is still required.
+    "Host=${local.db_parts.host}",
+    "Port=${local.db_parts.port}",
+    "Database=${local.db_parts.database}",
+    "Username=${scaleway_iam_application.db.id}",
+    "Password=${scaleway_iam_api_key.db.secret_key}",
     "SSL Mode=Require",
-    "Trust Server Certificate=true",
+    # Allow for the database waking up from zero.
+    "Timeout=30",
   ])
 }

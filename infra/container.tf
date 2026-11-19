@@ -13,9 +13,9 @@ resource "scaleway_container" "app" {
   protocol     = "http1"
   privacy      = "public"
 
-  # 560 mVCPU / 1 GiB is one of Scaleway's standard size pairs.
-  cpu_limit          = 560
-  memory_limit_bytes = 1024 * 1024 * 1024
+  # 280 mVCPU / 512 MiB: the smallest standard size that runs .NET comfortably for demos.
+  cpu_limit          = 280
+  memory_limit_bytes = 512 * 1024 * 1024
 
   # max_scale stays 1 until SignalR gets a Redis backplane (see plan).
   min_scale = var.min_scale
@@ -25,7 +25,6 @@ resource "scaleway_container" "app" {
   timeout = 900
 
   https_connections_only = true
-  private_network_id     = scaleway_vpc_private_network.main.id
 
   environment_variables = {
     ASPNETCORE_ENVIRONMENT = "Production"
@@ -37,6 +36,7 @@ resource "scaleway_container" "app" {
 
   # Probes only check the process (/health/live); /health also checks the database.
   startup_probe {
+    # Up to ~60 s for a cold start.
     failure_threshold = 30
     interval          = "2s"
     timeout           = "2s"
@@ -57,5 +57,5 @@ resource "scaleway_container" "app" {
   region = var.region
   tags   = local.tags
 
-  depends_on = [scaleway_rdb_privilege.app]
+  depends_on = [scaleway_iam_policy.db]
 }
