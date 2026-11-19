@@ -7,9 +7,9 @@ Audience insights: live polls, quizzes, surveys and Q&A. A host builds activitie
 | `web/` | React + Vite + TypeScript, react-i18next (English, Norwegian bokmål) |
 | `api/` | .NET 10 / ASP.NET Core (serves the API, SignalR hub and the built SPA) |
 | `infra/` | OpenTofu for Scaleway (Serverless Containers, Managed PostgreSQL, Container Registry) |
-| `.github/workflows/` | CI (build, test, `tofu validate`) and, from M1, deploy |
+| `.github/workflows/` | CI (build, test, `tofu validate`/`plan`) and Deploy (image → Scaleway → health check) |
 
-Production URL (from M1): https://sight.tobba.no
+Production URL: https://sight.tobba.no (after the one-time setup in [`infra/README.md`](infra/README.md))
 
 ## Local development
 
@@ -41,8 +41,8 @@ UI strings live in `web/src/locales/en.json` and `web/src/locales/nb.json`. A te
 
 ## Roadmap
 
-- [x] M0: Skeleton (this)
-- [ ] M1: Infrastructure on Scaleway and first deploy to sight.tobba.no
+- [x] M0: Skeleton
+- [x] M1: Infrastructure on Scaleway and deploy pipeline (custom domain after first deploy)
 - [ ] M2: Host accounts, activities, sessions and join codes
 - [ ] M3: Live poll
 - [ ] M4: Quiz

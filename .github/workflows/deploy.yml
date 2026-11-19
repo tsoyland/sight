@@ -1,0 +1,135 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      min_scale:
+        description: "Minimum running instances: 1 = warm for an event, 0 = scale to zero. 'keep' leaves it as it is."
+        type: choice
+        options: ["keep", "0", "1"]
+        default: "keep"
+
+permissions:
+  contents: read
+
+# Never run two applies against the same state at once.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+  SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+  SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+  SCW_DEFAULT_ORGANIZATION_ID: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+  # The S3 state backend uses the same Scaleway key.
+  AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.smoke.outputs.url }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - name: Check Scaleway secrets
+        working-directory: .
+        run: |
+          missing=""
+          for name in SCW_ACCESS_KEY SCW_SECRET_KEY SCW_DEFAULT_PROJECT_ID SCW_DEFAULT_ORGANIZATION_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secrets:$missing. See infra/README.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_wrapper: false
+
+      - run: tofu init -backend-config=backend.hcl
+
+      - name: Decide min_scale
+        id: scale
+        run: |
+          requested="${{ inputs.min_scale || 'keep' }}"
+          if [ "$requested" = "keep" ]; then
+            # Keep whatever is deployed now (0 on the very first deploy).
+            # (-json gives {} before the first deploy; -raw would print a warning instead.)
+            requested=$(tofu output -json | jq -r '.min_scale.value // 0')
+          fi
+          echo "value=$requested" >> "$GITHUB_OUTPUT"
+          echo "min_scale: $requested"
+
+      # The registry must exist before the first image can be pushed.
+      - name: Ensure registry
+        run: tofu apply -auto-approve -target=scaleway_registry_namespace.main -var "image_tag=$IMAGE_TAG"
+
+      - name: Registry endpoint
+        id: registry
+        run: |
+          endpoint=$(tofu output -json | jq -r '.registry_endpoint.value // empty')
+          [[ "$endpoint" == rg.* ]] || { echo "::error::Unexpected registry endpoint: '$endpoint'"; exit 1; }
+          echo "endpoint=$endpoint" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: rg.fr-par.scw.cloud
+          username: nologin
+          password: ${{ secrets.SCW_SECRET_KEY }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.registry.outputs.endpoint }}/sight:${{ github.sha }}
+          build-args: VERSION=0.1.${{ github.run_number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Apply
+        run: tofu apply -auto-approve -var "image_tag=$IMAGE_TAG" -var "min_scale=${{ steps.scale.outputs.value }}"
+
+      - name: Smoke test
+        id: smoke
+        run: |
+          url=$(tofu output -raw app_url)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          # Allow for cold start and the first database connection.
+          for i in $(seq 1 30); do
+            if body=$(curl -fsS --max-time 10 "$url/health"); then
+              echo "Health: $body"
+              curl -fsS "$url/api/info"; echo
+              exit 0
+            fi
+            echo "Attempt $i: not healthy yet"; sleep 10
+          done
+          echo "::error::$url/health did not become healthy"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          out() { tofu output -json 2>/dev/null | jq -r --arg k "$1" '.[$k].value // "-"'; }
+          {
+            echo "### Sight deploy"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| URL | $(out app_url) |"
+            echo "| CNAME target | \`$(out container_hostname)\` |"
+            echo "| Image tag | \`$IMAGE_TAG\` |"
+            echo "| min_scale | ${{ steps.scale.outputs.value }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

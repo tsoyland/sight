@@ -6,10 +6,12 @@ namespace Sight.Api.Tests;
 
 public class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
-    [Fact]
-    public async Task Health_returns_ok()
+    [Theory]
+    [InlineData("/health")]
+    [InlineData("/health/live")]
+    public async Task Health_endpoints_return_ok(string path)
     {
-        var response = await factory.CreateClient().GetAsync("/health");
+        var response = await factory.CreateClient().GetAsync(path);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

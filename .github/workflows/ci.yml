@@ -20,8 +20,8 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
       - run: dotnet restore
@@ -35,8 +35,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -53,18 +53,68 @@ jobs:
       run:
         working-directory: infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@v6
+      - uses: opentofu/setup-opentofu@v2
       - run: tofu fmt -check -recursive
       - run: tofu init -backend=false -input=false
       - run: tofu validate
+
+  plan:
+    name: Infra plan (OpenTofu)
+    runs-on: ubuntu-latest
+    needs: [infra]
+    # Secrets aren't available to PRs from forks.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+      SCW_DEFAULT_ORGANIZATION_ID: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      TF_IN_AUTOMATION: "1"
+      TF_INPUT: "0"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_wrapper: false
+      - name: Plan
+        run: |
+          if [ -z "$SCW_SECRET_KEY" ]; then
+            echo "::notice::Scaleway secrets not configured yet; skipping plan (see infra/README.md)."
+            exit 0
+          fi
+          set -o pipefail
+          tofu init -backend-config=backend.hcl
+          # Plan against what is deployed now, so only infrastructure changes show up.
+          # (-json gives {} before the first deploy; -raw would print a warning instead.)
+          outputs=$(tofu output -json)
+          tag=$(jq -r '.image_tag.value // "not-deployed"' <<<"$outputs")
+          scale=$(jq -r '.min_scale.value // 0' <<<"$outputs")
+          tofu plan -no-color -var "image_tag=$tag" -var "min_scale=$scale" | tee plan.txt
+          {
+            echo "### OpenTofu plan"
+            echo '```'
+            grep -E '^(Plan:|No changes)' plan.txt || tail -n 5 plan.txt
+            echo '```'
+            echo "<details><summary>Full plan</summary>"
+            echo
+            echo '```'
+            cat plan.txt
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   docker:
     name: Docker image
     runs-on: ubuntu-latest
     needs: [api, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
