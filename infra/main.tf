@@ -1,3 +1,3 @@
 locals {
-  tags = ["app:${var.app_name}", "managed-by:opentofu"]
+  tags = ["app=${var.app_name}", "managed-by=opentofu"]
 }
