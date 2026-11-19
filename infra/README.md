@@ -21,6 +21,24 @@ The database is reached over TLS and requires an IAM key: the container uses its
 
 ## One-time setup (you)
 
+**Quick way (recommended):** with the [Scaleway CLI](https://github.com/scaleway/scaleway-cli) and [GitHub CLI](https://cli.github.com) installed, run:
+
+```bash
+scw init
+```
+
+```bash
+gh auth login
+```
+
+```bash
+./scripts/bootstrap-scaleway.sh
+```
+
+The script does steps 1–4 below for you: it creates the project, the IAM application and its policy, and the versioned state bucket, then generates an API key and stores it straight into the GitHub secrets. It never prints the secret key and is safe to re-run. Then continue at step 5.
+
+**Manual way:** the same steps in the Scaleway console:
+
 ### 1. Scaleway project and IDs
 1. Log in at <https://console.scaleway.com>.
 2. Use the default project or create one called `sight` (top-left project switcher → **Create project**).
